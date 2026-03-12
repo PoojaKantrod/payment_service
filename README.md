@@ -1,62 +1,78 @@
-# Retry Mechanism in Java
+Payment Service – Idempotent Payment Processing with Redis
 
-This project demonstrates a **flexible retry mechanism** with **configurable backoff strategies** in Java. It provides detailed logs for each attempt, showing which exception occurred, how long it waited, and why the retries stopped.
+Overview
 
----
+This project implements a Payment Processing Service built using Spring Boot, PostgreSQL, and Redis to demonstrate how idempotency can be implemented in distributed systems.
 
-## Features
+In real-world payment systems, duplicate requests may occur due to:
+	•	Network retries
+	•	Client timeouts
+	•	API gateway retries
+	•	Users clicking the payment button multiple times
 
-1. **Retry with Backoff Strategies**
-   - **FixedBackoff**: Waits a constant time between retries.
-   - **ExponentialBackoff**: Waits exponentially longer after each failed attempt.
-   - **ExponentialBackoffWithJitter**: Adds random jitter to exponential backoff to avoid synchronized retries.
+Without idempotency protection, the same payment could be processed multiple times, which is unacceptable for financial transactions.
 
-2. **Verbose Retry Logging**
-   - Shows exception on each attempt.
-   - Displays wait time before the next attempt.
-   - Tracks total wait time.
-   - Explains why the retry stopped (success, max attempts reached, etc.).
-   - Shows which backoff strategy was used.
+This service prevents duplicate payments using Redis-based idempotency keys.
 
----
+-----
+System Architecture:
+Client
+  │
+  │  HTTP Request (Idempotency-Key)
+  ▼
+Spring Boot REST Controller
+  │
+  ▼
+Payment Service
+  │
+  │  Check Idempotency Key
+  ▼
+Redis (SETNX)
+  │
+  ├── Key Exists → Reject Duplicate Request
+  │
+  └── Key Not Found
+          │
+          ▼
+      PostgreSQL Database
+          │
+          ▼
+      Payment Created
 
-## Example Output
 
-=== Testing with FixedBackoff ===
-Attempt 1 failed: Random failure: 0.42
-Waiting 200 ms before next attempt...
-Attempt 2 failed: Random failure: 0.15
-Waiting 200 ms before next attempt...
-...
-RetryResult{success=true, result=Success!, lastException=null, attempts=3, totalWaitMillis=400, reasonStopped='Success', backoffStrategy='FixedBackoff'}
+--------
+Key Features
+	•	Idempotent payment processing
+	•	Redis-based duplicate request protection
+	•	RESTful API using Spring Boot
+	•	PostgreSQL persistence
+	•	Clean layered architecture
+	•	Demonstrates distributed system reliability patterns
 
-=== Testing with ExponentialBackoff ===
-Attempt 1 failed: Random failure: 0.33
-Waiting 100 ms before next attempt...
-Attempt 2 failed: Random failure: 0.55
-Waiting 200 ms before next attempt...
-...
-RetryResult{success=true, result=Success!, lastException=null, attempts=3, totalWaitMillis=300, reasonStopped='Success', backoffStrategy='ExponentialBackoff'}
+-------
+How Idempotency Works
 
-=== Testing with ExponentialBackoffWithJitter ===
-Attempt 1 failed: Random failure: 0.48
-Waiting 135 ms before next attempt...
-Attempt 2 failed: Random failure: 0.22
-Waiting 295 ms before next attempt...
-...
-RetryResult{success=true, result=Success!, lastException=null, attempts=3, totalWaitMillis=430, reasonStopped='Success', backoffStrategy='ExponentialBackoffWithJitter'}
+The client sends a unique Idempotency-Key with each payment request.
 
----
+Example request header: Idempotency-Key: payment-123
 
-## How to Run
+The system performs the following steps:
+	1.	Check Redis for the key using SETNX (Set If Not Exists).
+	2.	If the key already exists → request is considered a duplicate.
+	3.	If the key does not exist → process the payment.
+	4.	Store the key in Redis with a TTL to prevent duplicates for a time window.
 
-1. Compile the project: mvn clean compile
-2. Run the demo: java -cp target/classes com.example.retry.demo.RetryDemo
+This guarantees that only one payment is processed per idempotency key.
 
----
+-------
+Running the Application
 
-## Notes
+Prerequisites
+	•	Java 17
+	•	Maven
+	•	PostgreSQL
+	•	Redis
 
-- This project can be extended with **custom retry policies** or **distributed retry mechanisms**.
-- Helps prevent overwhelming resources by applying controlled backoff.
-- All strategies currently support **tracking total wait time**, **attempt count**, and **reason for stopping**.
+-------
+
+
